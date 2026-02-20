@@ -1,7 +1,9 @@
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 -- [ LOAD MODULES ]
+-- Pastikan kamu sudah upload Modul HUD dan Engine ke GitHub/Pastebin
 local HUD_Mod = loadstring(game:HttpGet("https://raw.githubusercontent.com/ddshub-max/DDSCruising/refs/heads/main/HudModule.lua"))()
 local Engine_Mod = loadstring(game:HttpGet("https://raw.githubusercontent.com/ddshub-max/DDSCruising/refs/heads/main/EngineModule.lua"))()
 local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/jensonhirst/Orion/main/source'))()
@@ -11,16 +13,36 @@ Engine_Mod:InitAntiAFK(player)
 local ScreenHUD, MoneyHUD, AvgHUD = HUD_Mod:Create(player.Name)
 local rpValue = player:WaitForChild("PlayerData"):WaitForChild("RPValue")
 
+-- State
 local cruiseActive = false
-local startTime, startRP = 0, 0
+local startTime, startRP, targetRP = 0, 0, 0
 local lockY = 0
 
-local Window = OrionLib:MakeWindow({Name = "💎 DDS MONITOR PREMIUM", IntroText = "WELCOME BOSS SYSTEM"})
+local Window = OrionLib:MakeWindow({
+    Name = "💎 DDS MONITOR PREMIUM", 
+    HidePremium = true, 
+    SaveConfig = false, 
+    IntroText = "WELCOME BOSS SYSTEM"
+})
+
+-- [ TAB DASHBOARD ]
 local MainTab = Window:MakeTab({Name = "Dashboard", Icon = "rbxassetid://6023426926"})
 
-local SaldoLabel = MainTab:AddLabel("💰 Saldo: RP 0")
+MainTab:AddSection({ Name = "✨ LIVE PROFIT STATUS" })
+local RPNowInfo = MainTab:AddLabel("💰 Saldo: RP 0")
+local RPResultInfo = MainTab:AddLabel("📈 Gained: + 0")
+local RPAVGInfo = MainTab:AddLabel("⚡ AVG/Hour: 0")
 
-MainTab:AddToggle({
+MainTab:AddSection({ Name = "⏳ SESSION PROGRESS" })
+local TimeInfo = MainTab:AddLabel("⏱️ Running: 00:00:00")
+local TargetInfo = MainTab:AddLabel("🎯 Target: -")
+local ETAInfo = MainTab:AddLabel("🚀 ETA: -")
+
+-- [ TAB CONTROL PANEL ]
+local SettingsTab = Window:MakeTab({Name = "Control Panel", Icon = "rbxassetid://6031289129"})
+
+SettingsTab:AddSection({ Name = "⚙️ CRUISE ENGINE" })
+SettingsTab:AddToggle({
     Name = "Start Auto Cruise",
     Default = false,
     Callback = function(v)
@@ -30,26 +52,57 @@ MainTab:AddToggle({
             Engine_Mod:ClearWorld(player)
             startTime, startRP = tick(), rpValue.Value
             local char = player.Character
-            local seat = char:FindFirstChildOfClass("Humanoid").SeatPart
-            if seat then lockY = seat.Position.Y end
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum and hum.SeatPart then lockY = hum.SeatPart.Position.Y end
         end
     end
 })
 
--- [ UPDATE LOOP ]
-local function format(n)
+SettingsTab:AddTextbox({
+    Name = "Target RP Goal",
+    Default = "",
+    TextDisappear = false,
+    Callback = function(Value)
+        targetRP = tonumber(Value) or 0
+        TargetInfo:Set("Target: " .. (targetRP > 0 and format(targetRP) or "-"))
+    end    
+})
+
+-- [ UPDATE LOGIC ]
+function format(n)
     return tostring(math.floor(n)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
 end
 
-game:GetService("RunService").RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function()
     local currentRP = rpValue.Value
-    SaldoLabel:Set("💰 Saldo: RP " .. format(currentRP))
+    RPNowInfo:Set("💰 Saldo: RP " .. format(currentRP))
     
     if cruiseActive then
+        -- Update Floating HUD
         MoneyHUD.Text = "💰 Rp. " .. format(currentRP)
+        
+        -- Update Orion Stats
         local elapsed = tick() - startTime
-        local perHour = elapsed > 0 and ((currentRP - startRP) / elapsed) * 3600 or 0
+        local gained = currentRP - startRP
+        local perHour = elapsed > 0 and (gained / elapsed) * 3600 or 0
+        
         AvgHUD.Text = "⚡ " .. format(perHour) .. " / hr"
+        RPResultInfo:Set("📈 Gained: + " .. format(gained))
+        RPAVGInfo:Set("⚡ AVG/Hour: " .. format(perHour))
+
+        -- Timer Logic
+        local h, m, s = math.floor(elapsed/3600), math.floor((elapsed%3600)/60), math.floor(elapsed%60)
+        TimeInfo:Set(string.format("⏱️ Running: %02d:%02d:%02d", h, m, s))
+
+        -- ETA Logic
+        if targetRP > 0 and perHour > 0 then
+            local remain = math.max(targetRP - currentRP, 0)
+            local eta = (remain / perHour) * 3600
+            local eh, em, es = math.floor(eta/3600), math.floor((eta%3600)/60), math.floor(eta%60)
+            ETAInfo:Set(string.format("🚀 ETA: %02dh %02dm %02ds", eh, em, es))
+        else
+            ETAInfo:Set("🚀 ETA: -")
+        end
     end
 end)
 
