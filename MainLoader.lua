@@ -10,6 +10,7 @@ local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/jens
 
 -- [ INITIALIZE ]
 Engine_Mod:InitAntiAFK(player)
+Engine_Mod:CreateAntiVoid(player)
 local ScreenHUD, MoneyHUD, AvgHUD = HUD_Mod:Create(player.Name)
 local rpValue = player:WaitForChild("PlayerData"):WaitForChild("RPValue")
 
