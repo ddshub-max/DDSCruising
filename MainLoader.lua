@@ -2,7 +2,7 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
 -- [ LOAD MODULES ]
-local HUD_Mod = loadstring(game:HttpGet("URL_MODUL_HUD_DI_SINI"))()
+local HUD_Mod = loadstring(game:HttpGet("https://raw.githubusercontent.com/ddshub-max/DDSCruising/refs/heads/main/HudModule.lua"))()
 local Engine_Mod = loadstring(game:HttpGet("URL_MODUL_ENGINE_DI_SINI"))()
 local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/jensonhirst/Orion/main/source'))()
 
