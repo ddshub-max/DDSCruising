@@ -4,7 +4,7 @@ function HUD:Create(playerName)
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "DDS_IndependentHUD"
     ScreenGui.ResetOnSpawn = false
-    ScreenGui.Enabled = true
+    ScreenGui.Enabled = false
     ScreenGui.Parent = (game:GetService("CoreGui") or game.Players.LocalPlayer:WaitForChild("PlayerGui"))
 
     local HUDFrame = Instance.new("Frame")
