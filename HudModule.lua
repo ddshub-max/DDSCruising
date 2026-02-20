@@ -8,7 +8,7 @@ function HUD:Create(playerName)
     ScreenGui.Parent = (game:GetService("CoreGui") or game.Players.LocalPlayer:WaitForChild("PlayerGui"))
 
     local HUDFrame = Instance.new("Frame")
-    HUDFrame.Size = UDim2.new(0, 200, 0, 100)
+    HUDFrame.Size = UDim2.new(0, 250, 0, 100)
     HUDFrame.Position = UDim2.new(0.5, -100, 0.05, 0)
     HUDFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
     HUDFrame.BackgroundTransparency = 0.3
@@ -28,7 +28,7 @@ function HUD:Create(playerName)
         return l
     end
 
-    local UserL = CreateLabel("User", UDim2.new(0,10,0,8), UDim2.new(1,-20,0,20), nil, Color3.fromRGB(200,200,200), "@"..playerName, false)
+    local UserL = CreateLabel("User", UDim2.new(0,10,0,28), UDim2.new(1,-20,0,35), nil, Color3.fromRGB(255,255,255), "@"..playerName, false)
     local MoneyL = CreateLabel("Money", UDim2.new(0,10,0,28), UDim2.new(1,-20,0,35), nil, Color3.fromRGB(255,255,255), "💰 Rp. 0", true)
     local AvgL = CreateLabel("Avg", UDim2.new(0,10,0,65), UDim2.new(1,-20,0,25), nil, Color3.fromRGB(0,255,180), "⚡ 0 / hr", false)
 
