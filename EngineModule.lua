@@ -1,36 +1,60 @@
 local Engine = {}
 
 -- [ SYSTEM: ANTI-AFK ]
-function Engine:InitAntiAFK(player)
-    -- [1] CLIENT-SIDE: Pemutusan Sinyal Idled (Metode Standar)
-    local GC = getconnections or get_signal_cons
-    if GC then
-        for i, v in pairs(GC(player.Idled)) do
-            if v["Disable"] then v["Disable"](v) elseif v["Disconnect"] then v["Disconnect"](v) end
-        end
-    else
-        player.Idled:Connect(function() end)
-    end
+--[[
+    ENGINE MODULE UPDATE: Perfect Anti-AFK
+    - No Movement (Silent)
+    - Anti-Server Kick (Bypass 20 min limit)
+    - VirtualUser Engine Interaction
+]]
 
-    -- [2] SILENT BYPASS: Simulasi Input Tanpa Gerakan Fisik
-    -- Metode ini menipu server dengan mengirim sinyal interaksi virtual
-    task.spawn(function()
-        local VirtualInputManager = game:GetService("VirtualInputManager")
-        while task.wait(math.random(30, 60)) do -- Update tiap 30-60 detik agar lebih rapat
-            pcall(function()
-                -- Mengirim sinyal "Mouse Button Down" di koordinat 0,0
-                -- Ini tidak akan mengklik tombol apapun di layar, tapi server menganggap ada aktivitas mouse
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                task.wait(0.1)
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-                
-                -- Alternatif: Simulasi sedikit pergerakan mouse (1 pixel saja)
-                VirtualInputManager:SendMouseMoveEvent(1, 1, game)
-                task.wait(0.1)
-                VirtualInputManager:SendMouseMoveEvent(0, 0, game)
+function Engine:InitAntiAFK(player)
+    -- [1] CLIENT-SIDE: Pemutusan Sinyal Idled (Metode Hardcore)
+    -- Kita menggunakan pcall agar jika salah satu metode gagal, script tidak error
+    pcall(function()
+        local GC = getconnections or get_signal_cons
+        if GC then
+            for _, v in pairs(GC(player.Idled)) do
+                if v["Disable"] then 
+                    v["Disable"](v) 
+                elseif v["Disconnect"] then 
+                    v["Disconnect"](v) 
+                end
+            end
+        else
+            -- Fallback jika executor tidak support getconnections
+            player.Idled:Connect(function() 
+                -- Kita paksa kirim input balik saat event Idled terpicu
+                game:GetService("VirtualUser"):CaptureController()
+                game:GetService("VirtualUser"):ClickButton2(Vector2.new(0,0))
             end)
         end
     end)
+
+    -- [2] INTERNAL ENGINE PULSE (The "Legit" Bypass)
+    -- Mengirim sinyal interaksi ke engine setiap 20-40 detik secara random
+    task.spawn(function()
+        local VU = game:GetService("VirtualUser")
+        local RunService = game:GetService("RunService")
+        
+        while task.wait(math.random(20, 40)) do
+            pcall(function()
+                -- CaptureController memastikan engine fokus pada input virtual kita
+                VU:CaptureController()
+                
+                -- Klik kanan pada koordinat kosong (Sangat Silent)
+                -- Ini memperbarui 'LastInputTime' di sisi Server 
+                VU:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                task.wait(0.1)
+                VU:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                
+                -- Simulasi pergerakan mouse internal (Invisible)
+                VU:MouseMoveEvent(Vector2.new(math.random(1, 5), math.random(1, 5)), workspace.CurrentCamera.CFrame)
+            end)
+        end
+    end)
+    
+    warn("✅ [Engine] Perfect Anti-AFK Initialized Successfully.")
 end
 
 -- [ SYSTEM: ANTI-VOID BASE ]
