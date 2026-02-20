@@ -2,6 +2,7 @@ local Engine = {}
 
 -- [ SYSTEM: ANTI-AFK ]
 function Engine:InitAntiAFK(player)
+    -- [1] CLIENT-SIDE: Pemutusan Sinyal Idled (Metode Standar)
     local GC = getconnections or get_signal_cons
     if GC then
         for i, v in pairs(GC(player.Idled)) do
@@ -10,6 +11,26 @@ function Engine:InitAntiAFK(player)
     else
         player.Idled:Connect(function() end)
     end
+
+    -- [2] SILENT BYPASS: Simulasi Input Tanpa Gerakan Fisik
+    -- Metode ini menipu server dengan mengirim sinyal interaksi virtual
+    task.spawn(function()
+        local VirtualInputManager = game:GetService("VirtualInputManager")
+        while task.wait(math.random(30, 60)) do -- Update tiap 30-60 detik agar lebih rapat
+            pcall(function()
+                -- Mengirim sinyal "Mouse Button Down" di koordinat 0,0
+                -- Ini tidak akan mengklik tombol apapun di layar, tapi server menganggap ada aktivitas mouse
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                task.wait(0.1)
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                
+                -- Alternatif: Simulasi sedikit pergerakan mouse (1 pixel saja)
+                VirtualInputManager:SendMouseMoveEvent(1, 1, game)
+                task.wait(0.1)
+                VirtualInputManager:SendMouseMoveEvent(0, 0, game)
+            end)
+        end
+    end)
 end
 
 -- [ SYSTEM: ANTI-VOID BASE ]
