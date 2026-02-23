@@ -3,7 +3,6 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 -- [ LOAD MODULES ]
--- Pastikan kamu sudah upload Modul HUD dan Engine ke GitHub/Pastebin
 local HUD_Mod = loadstring(game:HttpGet("https://raw.githubusercontent.com/ddshub-max/DDSCruising/refs/heads/main/HudModule.lua"))()
 local Engine_Mod = loadstring(game:HttpGet("https://raw.githubusercontent.com/ddshub-max/DDSCruising/refs/heads/main/EngineModule.lua"))()
 local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/jensonhirst/Orion/main/source'))()
@@ -42,7 +41,28 @@ local ETAInfo = MainTab:AddLabel("🚀 ETA: -")
 -- [ TAB CONTROL PANEL ]
 local SettingsTab = Window:MakeTab({Name = "Control Panel", Icon = "rbxassetid://6031289129"})
 
+SettingsTab:AddSection({ Name = "🛵 VEHICLE INTERACTION" })
+
+-- TOMBOL BARU: RIDE MOTOR
+SettingsTab:AddButton({
+    Name = "Ride My Motor",
+    Callback = function()
+        -- Memanggil fungsi dari EngineModule
+        Engine_Mod:RideMotor(player)
+        
+        -- Update lockY otomatis setelah naik agar Cruise stabil
+        task.wait(2.5) -- Tunggu animasi duduk selesai
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.SeatPart then
+            lockY = hum.SeatPart.Position.Y
+            print("⚓ LockY Updated to: " .. lockY)
+        end
+    end    
+})
+
 SettingsTab:AddSection({ Name = "⚙️ CRUISE ENGINE" })
+
 SettingsTab:AddToggle({
     Name = "Start Auto Cruise",
     Default = false,
@@ -52,9 +72,13 @@ SettingsTab:AddToggle({
         if v then
             Engine_Mod:ClearWorld(player)
             startTime, startRP = tick(), rpValue.Value
+            
+            -- Re-check lockY jika belum terisi
             local char = player.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.SeatPart then lockY = hum.SeatPart.Position.Y end
+            if hum and hum.SeatPart then 
+                lockY = hum.SeatPart.Position.Y 
+            end
         end
     end
 })
@@ -79,10 +103,8 @@ RunService.RenderStepped:Connect(function()
     RPNowInfo:Set("💰 Saldo: RP " .. format(currentRP))
     
     if cruiseActive then
-        -- Update Floating HUD
         MoneyHUD.Text = "💰 Rp. " .. format(currentRP)
         
-        -- Update Orion Stats
         local elapsed = tick() - startTime
         local gained = currentRP - startRP
         local perHour = elapsed > 0 and (gained / elapsed) * 3600 or 0
@@ -91,11 +113,9 @@ RunService.RenderStepped:Connect(function()
         RPResultInfo:Set("📈 Gained: + " .. format(gained))
         RPAVGInfo:Set("⚡ AVG/Hour: " .. format(perHour))
 
-        -- Timer Logic
         local h, m, s = math.floor(elapsed/3600), math.floor((elapsed%3600)/60), math.floor(elapsed%60)
         TimeInfo:Set(string.format("⏱️ Running: %02d:%02d:%02d", h, m, s))
 
-        -- ETA Logic
         if targetRP > 0 and perHour > 0 then
             local remain = math.max(targetRP - currentRP, 0)
             local eta = (remain / perHour) * 3600
@@ -110,7 +130,7 @@ end)
 -- [ RUN ENGINE ]
 Engine_Mod:RunCruise(player, {
     IsActive = function() return cruiseActive end,
-    LockY = lockY
+    LockY = function() return lockY end -- Menggunakan function agar dinamis
 })
 
 OrionLib:Init()
