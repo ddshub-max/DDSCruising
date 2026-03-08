@@ -113,18 +113,24 @@ function Engine:ClearWorld(player)
 end
 
 -- [ SYSTEM: CRUISE LOGIC ]
+-- [ SYSTEM: CRUISE LOGIC WITH ACCELERATION ]
 function Engine:RunCruise(player, config)
     local angle = math.random() * math.pi * 2
-    local CONSTANT_SPEED = 249 -- Dikunci di angka tertinggi untuk max gain
+    local MAX_SPEED = 249 -- Kecepatan tertinggi
+    local ACCEL_DURATION = 10 -- Waktu (detik) untuk mencapai MAX_SPEED
+    local startTime = tick() -- Mencatat waktu mulai
     
     return game:GetService("RunService").Heartbeat:Connect(function(dt)
-        if not config.IsActive() then return end
+        if not config.IsActive() then 
+            startTime = tick() -- Reset waktu jika tidak aktif agar saat mulai lagi mulai dari pelan
+            return 
+        end
         
         local char = player.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         local seat = hum and hum.SeatPart
         
-        -- Auto Re-Sit yang lebih responsif
+        -- Auto Re-Sit
         if hum and not seat then
             local pattern = player.Name .. "Montors"
             for _, obj in pairs(workspace:GetChildren()) do
@@ -139,17 +145,20 @@ function Engine:RunCruise(player, config)
         
         local motor = seat:FindFirstAncestorOfClass("Model")
         local motorRoot = (motor and motor.PrimaryPart) or seat
-        
         if not motorRoot then return end
         
-        -- Lock status duduk agar tidak terpental
         hum.Sit = true
 
-        -- Gerakan melingkar yang lebih stabil
-        angle += 0.5 * dt -- Sedikit dipercepat perputarannya
+        -- LOGIKA AKSELERASI (0 ke MAX dalam 10 detik)
+        local elapsed = tick() - startTime
+        local alpha = math.min(elapsed / ACCEL_DURATION, 1) -- Menghasilkan angka 0 sampai 1
+        local currentSpeed = alpha * MAX_SPEED -- Kecepatan saat ini berdasarkan waktu
+
+        -- Gerakan melingkar
+        angle += 0.5 * dt 
         local move = Vector3.new(math.cos(angle), 0, math.sin(angle))
         
-        -- Boundary (Jaga agar tetap di area aktif game)
+        -- Boundary (Jaga agar tetap di area aktif)
         if Vector3.new(motorRoot.Position.X, 0, motorRoot.Position.Z).Magnitude > 2500 then
             move = move:Lerp((-Vector3.new(motorRoot.Position.X, 0, motorRoot.Position.Z)).Unit, 0.1)
         end
@@ -157,10 +166,10 @@ function Engine:RunCruise(player, config)
         -- Penentuan Tinggi (Y-Level)
         local targetY = (typeof(config.LockY) == "function" and config.LockY()) or config.LockY or motorRoot.Position.Y
         
-        -- EKSEKUSI PHYSICS (Tanpa Friction)
-        motorRoot.AssemblyLinearVelocity = (move * CONSTANT_SPEED) + Vector3.new(0, (targetY - motorRoot.Position.Y) * 35, 0)
+        -- EKSEKUSI PHYSICS (Menggunakan currentSpeed yang dinamis)
+        motorRoot.AssemblyLinearVelocity = (move * currentSpeed) + Vector3.new(0, (targetY - motorRoot.Position.Y) * 35, 0)
         
-        -- Kunci Rotasi: Mencegah motor miring ke samping/depan yang bikin speed drop
+        -- Kunci Rotasi
         motorRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
     end)
 end
