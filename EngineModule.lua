@@ -113,11 +113,12 @@ function Engine:ClearWorld(player)
     end
 end
 
--- [ SYSTEM: CRUISE LOGIC WITH NOISE & SMOOTH ACCEL ]
+-- [ SYSTEM: CRUISE LOGIC - START 0, CYCLE 200-249 ]
 function Engine:RunCruise(player, config)
     local angle = math.random() * math.pi * 2
+    local MIN_SPEED = 200
     local MAX_SPEED = 249
-    local ACCEL_DURATION = 15 -- Waktu mencapai speed max (detik)
+    local ACCEL_DURATION = 15 -- Waktu dari 0 ke MAX saat pertama kali jalan
     local startTime = tick() 
     
     local lastNoiseUpdate = 0
@@ -133,7 +134,7 @@ function Engine:RunCruise(player, config)
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         local seat = hum and hum.SeatPart
         
-        -- Auto Re-Sit jika terjatuh
+        -- Auto Re-Sit Logic
         if hum and not seat then
             local pattern = player.Name .. "Montors"
             for _, obj in pairs(workspace:GetChildren()) do
@@ -152,43 +153,47 @@ function Engine:RunCruise(player, config)
         
         hum.Sit = true
 
-        -- 1. LOGIKA AKSELERASI (0 ke MAX secara bertahap)
+        -- LOGIKA KECEPATAN (ACCEL & CYCLE)
         local elapsed = tick() - startTime
-        local alpha = math.min(elapsed / ACCEL_DURATION, 1) 
+        local finalSpeed = 0
+
+        if elapsed < ACCEL_DURATION then
+            -- FASE 1: Start dari 0 ke Max Speed (Initial Acceleration)
+            local alpha = elapsed / ACCEL_DURATION
+            finalSpeed = alpha * MAX_SPEED
+        else
+            -- FASE 2: Cycling antara MIN dan MAX (Looping)
+            -- Menggunakan math.sin untuk membuat efek naik turun yang mulus (BPM/Speed Cycle)
+            local cycleTime = tick() * 0.5 -- Mengatur kecepatan siklus naik-turunnya
+            local cycleAlpha = (math.sin(cycleTime) + 1) / 2 -- Mengubah -1 ke 1 menjadi 0 ke 1
+            finalSpeed = MIN_SPEED + (cycleAlpha * (MAX_SPEED - MIN_SPEED))
+        end
         
-        -- 2. PENAMBAHAN NOISE (Agar speed tidak kaku)
-        if tick() - lastNoiseUpdate > 0.5 then
-            currentNoise = math.random(-3000, 3000) / 1000 -- Variasi +/- 3
+        -- PENAMBAHAN NOISE (Agar data speed tetap acak/jitter)
+        if tick() - lastNoiseUpdate > 0.3 then
+            currentNoise = math.random(-2000, 2000) / 1000 
             lastNoiseUpdate = tick()
         end
 
-        local baseSpeed = alpha * MAX_SPEED
-        local finalSpeed = baseSpeed + currentNoise
+        finalSpeed = finalSpeed + currentNoise
         
-        -- Clamp agar tidak overshoot melebihi batas anti-cheat
-        if finalSpeed > MAX_SPEED then 
-            finalSpeed = MAX_SPEED - math.random(1, 3) 
-        end
+        -- Clamp Safety
+        if finalSpeed > MAX_SPEED then finalSpeed = MAX_SPEED - math.random(1, 2) end
 
-        -- 3. GERAKAN DINAMIS (Radius Berubah Perlahan)
+        -- GERAKAN DINAMIS (Radius)
         local dynamicRadius = 2200 + (math.sin(tick() * 0.2) * 300)
         angle += 0.4 * dt 
-        
         local move = Vector3.new(math.cos(angle), 0, math.sin(angle))
         
-        -- Boundary (Kembali ke tengah jika terlalu jauh)
+        -- Boundary Check
         local currentPosXZ = Vector3.new(motorRoot.Position.X, 0, motorRoot.Position.Z)
         if currentPosXZ.Magnitude > dynamicRadius then
             move = move:Lerp((-currentPosXZ).Unit, 0.05)
         end
         
-        -- 4. PENENTUAN TINGGI
+        -- EKSEKUSI PHYSICS
         local targetY = (typeof(config.LockY) == "function" and config.LockY()) or config.LockY or motorRoot.Position.Y
-        
-        -- 5. EKSEKUSI PHYSICS
         motorRoot.AssemblyLinearVelocity = (move * finalSpeed) + Vector3.new(0, (targetY - motorRoot.Position.Y) * 35, 0)
-        motorRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0) -- Jaga stabilitas
+        motorRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0) 
     end)
 end
-
-return Engine
