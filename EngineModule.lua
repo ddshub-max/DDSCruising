@@ -1,6 +1,7 @@
 local Engine = {}
 
 -- [ SYSTEM: ANTI-AFK ]
+-- Menggunakan metode ganda untuk melewati deteksi idleness
 function Engine:InitAntiAFK(player)
     pcall(function()
         local GC = getconnections or get_signal_cons
@@ -28,7 +29,7 @@ function Engine:InitAntiAFK(player)
             end)
         end
     end)
-    warn("✅ [Engine] Anti-AFK Active.")
+    warn("✅ [Engine] Anti-AFK Active with Pattern Randomizer.")
 end
 
 -- [ SYSTEM: ANTI-VOID BASE ]
@@ -42,13 +43,13 @@ function Engine:CreateAntiVoid(player)
             end
             local base = Instance.new("Part")
             base.Name = "AntiVoidBase_DDS"
-            base.Size = Vector3.new(6000, 1, 6000)
+            base.Size = Vector3.new(8000, 1, 8000) -- Ukuran diperluas
             base.Position = root.Position - Vector3.new(0, 25, 0)
             base.Anchored = true
             base.Transparency = 0.8
             base.BrickColor = BrickColor.new("Electric blue")
             base.Material = Enum.Material.Neon
-            -- OPTIMASI: Menghilangkan gesekan agar tidak menghambat speed motor
+            -- Friction 0 agar motor tidak tersendat saat kencang
             base.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
             base.Parent = game.Workspace
         end
@@ -78,6 +79,7 @@ function Engine:RideMotor(player)
         local driveSeat = motorModel:FindFirstChild("DriveSeat") or motorModel:FindFirstChildWhichIsA("VehicleSeat", true)
         
         if driveSeat then
+            -- Note: NetworkOwner hanya bekerja jika dipanggil server, pcall untuk keamanan
             pcall(function() driveSeat:SetNetworkOwner(player) end)
             root.CFrame = driveSeat.CFrame
             task.wait(0.1)
@@ -90,7 +92,6 @@ function Engine:RideMotor(player)
                 prompt:InputHoldEnd()
             end
             
-            -- Memastikan masuk kursi
             if not hum.Sit then driveSeat:Sit(hum) end
             print("✅ Motor Mounted.")
         else
@@ -112,17 +113,19 @@ function Engine:ClearWorld(player)
     end
 end
 
--- [ SYSTEM: CRUISE LOGIC ]
--- [ SYSTEM: CRUISE LOGIC WITH ACCELERATION ]
+-- [ SYSTEM: CRUISE LOGIC WITH NOISE & SMOOTH ACCEL ]
 function Engine:RunCruise(player, config)
     local angle = math.random() * math.pi * 2
-    local MAX_SPEED = 249 -- Kecepatan tertinggi
-    local ACCEL_DURATION = 10 -- Waktu (detik) untuk mencapai MAX_SPEED
-    local startTime = tick() -- Mencatat waktu mulai
+    local MAX_SPEED = 249
+    local ACCEL_DURATION = 15 -- Waktu mencapai speed max (detik)
+    local startTime = tick() 
+    
+    local lastNoiseUpdate = 0
+    local currentNoise = 0
     
     return game:GetService("RunService").Heartbeat:Connect(function(dt)
         if not config.IsActive() then 
-            startTime = tick() -- Reset waktu jika tidak aktif agar saat mulai lagi mulai dari pelan
+            startTime = tick() 
             return 
         end
         
@@ -130,7 +133,7 @@ function Engine:RunCruise(player, config)
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         local seat = hum and hum.SeatPart
         
-        -- Auto Re-Sit
+        -- Auto Re-Sit jika terjatuh
         if hum and not seat then
             local pattern = player.Name .. "Montors"
             for _, obj in pairs(workspace:GetChildren()) do
@@ -149,28 +152,42 @@ function Engine:RunCruise(player, config)
         
         hum.Sit = true
 
-        -- LOGIKA AKSELERASI (0 ke MAX dalam 10 detik)
+        -- 1. LOGIKA AKSELERASI (0 ke MAX secara bertahap)
         local elapsed = tick() - startTime
-        local alpha = math.min(elapsed / ACCEL_DURATION, 1) -- Menghasilkan angka 0 sampai 1
-        local currentSpeed = alpha * MAX_SPEED -- Kecepatan saat ini berdasarkan waktu
+        local alpha = math.min(elapsed / ACCEL_DURATION, 1) 
+        
+        -- 2. PENAMBAHAN NOISE (Agar speed tidak kaku)
+        if tick() - lastNoiseUpdate > 0.5 then
+            currentNoise = math.random(-3000, 3000) / 1000 -- Variasi +/- 3
+            lastNoiseUpdate = tick()
+        end
 
-        -- Gerakan melingkar
-        angle += 0.5 * dt 
+        local baseSpeed = alpha * MAX_SPEED
+        local finalSpeed = baseSpeed + currentNoise
+        
+        -- Clamp agar tidak overshoot melebihi batas anti-cheat
+        if finalSpeed > MAX_SPEED then 
+            finalSpeed = MAX_SPEED - math.random(1, 3) 
+        end
+
+        -- 3. GERAKAN DINAMIS (Radius Berubah Perlahan)
+        local dynamicRadius = 2200 + (math.sin(tick() * 0.2) * 300)
+        angle += 0.4 * dt 
+        
         local move = Vector3.new(math.cos(angle), 0, math.sin(angle))
         
-        -- Boundary (Jaga agar tetap di area aktif)
-        if Vector3.new(motorRoot.Position.X, 0, motorRoot.Position.Z).Magnitude > 2500 then
-            move = move:Lerp((-Vector3.new(motorRoot.Position.X, 0, motorRoot.Position.Z)).Unit, 0.1)
+        -- Boundary (Kembali ke tengah jika terlalu jauh)
+        local currentPosXZ = Vector3.new(motorRoot.Position.X, 0, motorRoot.Position.Z)
+        if currentPosXZ.Magnitude > dynamicRadius then
+            move = move:Lerp((-currentPosXZ).Unit, 0.05)
         end
         
-        -- Penentuan Tinggi (Y-Level)
+        -- 4. PENENTUAN TINGGI
         local targetY = (typeof(config.LockY) == "function" and config.LockY()) or config.LockY or motorRoot.Position.Y
         
-        -- EKSEKUSI PHYSICS (Menggunakan currentSpeed yang dinamis)
-        motorRoot.AssemblyLinearVelocity = (move * currentSpeed) + Vector3.new(0, (targetY - motorRoot.Position.Y) * 35, 0)
-        
-        -- Kunci Rotasi
-        motorRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        -- 5. EKSEKUSI PHYSICS
+        motorRoot.AssemblyLinearVelocity = (move * finalSpeed) + Vector3.new(0, (targetY - motorRoot.Position.Y) * 35, 0)
+        motorRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0) -- Jaga stabilitas
     end)
 end
 
