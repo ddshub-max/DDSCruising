@@ -14,7 +14,7 @@ function HUD:Create(playerName)
     MainBG.Name = "MainBackground"
     MainBG.Size = UDim2.new(1, 0, 1, 0)
     MainBG.BackgroundColor3 = Color3.fromRGB(10, 10, 15) -- Gelap elegan
-    MainBG.BackgroundTransparency = 0
+    MainBG.BackgroundTransparency = 1
     MainBG.BorderSizePixel = 0
     MainBG.ScrollBarThickness = 0
     MainBG.CanvasSize = UDim2.new(1, 0, 1, 0)
