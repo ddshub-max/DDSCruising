@@ -112,17 +112,12 @@ end
 
 -- [ SYSTEM: CLEAR WORLD (OPTIMIZED) ]
 function Engine:ClearWorld(player)
-    -- Hati-hati: Menghapus terlalu banyak objek bisa trigger anti-cheat "Instance Missing"
     for _, obj in ipairs(game.Workspace:GetChildren()) do
-        if obj:IsA("Terrain") or obj:IsA("Camera") or obj.Name == player.Name or obj.Name == "GlassFloor_System" then 
+        if obj:IsA("Terrain") or obj:IsA("Camera") or obj.Name == player.Name or obj.Name == "AntiVoidBase_DDS" then 
             continue 
         end
         if string.find(obj.Name, "Montors") then continue end
-        
-        -- Hanya hapus part dekoratif/map besar, jangan hapus script atau folder penting
-        if obj:IsA("BasePart") or obj:IsA("Model") then
-            pcall(function() obj:Destroy() end)
-        end
+        pcall(function() obj:Destroy() end)
     end
 end
 
