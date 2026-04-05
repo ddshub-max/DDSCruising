@@ -1,7 +1,6 @@
 local Engine = {}
 
 -- [ SYSTEM: ANTI-AFK STEALTH ]
--- Menggunakan simulasi input yang lebih acak untuk menghindari deteksi pola
 function Engine:InitAntiAFK(player)
     pcall(function()
         local GC = getconnections or get_signal_cons
@@ -12,26 +11,23 @@ function Engine:InitAntiAFK(player)
             end
         else
             player.Idled:Connect(function() 
-                local VU = game:GetService("VirtualUser")
-                VU:CaptureController()
-                VU:ClickButton2(Vector2.new(math.random(1,10), math.random(1,10)))
+                game:GetService("VirtualUser"):CaptureController()
+                game:GetService("VirtualUser"):ClickButton2(Vector2.new(math.random(1,50), math.random(1,50)))
             end)
         end
     end)
 
     task.spawn(function()
         local VU = game:GetService("VirtualUser")
-        while task.wait(math.random(15, 35)) do 
+        while task.wait(math.random(20, 45)) do 
             pcall(function()
                 VU:CaptureController()
-                -- Menggunakan sedikit variasi tombol agar terlihat seperti aktivitas manusia
                 VU:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                task.wait(math.random(1, 5) / 10)
+                task.wait(math.random(2, 8) / 10)
                 VU:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
             end)
         end
     end)
-    warn("✅ [Engine] Anti-AFK Stealth Mode Active.")
 end
 
 -- [ SYSTEM: ANTI-VOID BASE ]
@@ -40,18 +36,18 @@ function Engine:CreateAntiVoid(player)
         local root = char:WaitForChild("HumanoidRootPart", 10)
         if root then
             task.wait(1)
-            -- Ganti nama part agar tidak mencurigakan jika discan server
-            if game.Workspace:FindFirstChild("GlassFloor_System") then
-                game.Workspace.GlassFloor_System:Destroy()
+            -- Ganti nama ke sesuatu yang sangat umum agar tidak terfilter
+            local baseName = "Part" 
+            if game.Workspace:FindFirstChild(baseName) and game.Workspace[baseName].Size.X > 4000 then
+                game.Workspace[baseName]:Destroy()
             end
             local base = Instance.new("Part")
-            base.Name = "GlassFloor_System" 
+            base.Name = baseName
             base.Size = Vector3.new(5000, 1, 5000)
-            base.Position = root.Position - Vector3.new(0, 25, 0)
+            -- Turunkan sedikit lebih jauh agar tidak dianggap nempel lantai
+            base.Position = root.Position - Vector3.new(0, 35, 0)
             base.Anchored = true
-            base.Transparency = 0.8
-            base.BrickColor = BrickColor.new("Institutional white")
-            base.Material = Enum.Material.Glass
+            base.Transparency = 1 -- Buat benar-benar tidak terlihat (invisible)
             base.Parent = game.Workspace
         end
     end
@@ -66,8 +62,6 @@ function Engine:RideMotor(player)
     local hum = char and char:FindFirstChild("Humanoid")
     local pattern = player.Name .. "Montors"
 
-    if not root or not hum then return warn("❌ Character not ready.") end
-
     local motorModel = nil
     for _, obj in pairs(workspace:GetChildren()) do
         if string.find(obj.Name, pattern) then
@@ -78,54 +72,49 @@ function Engine:RideMotor(player)
 
     if motorModel then
         local driveSeat = motorModel:FindFirstChildWhichIsA("VehicleSeat", true)
-        
         if driveSeat then
-            pcall(function()
-                if driveSeat.NetworkOwner ~= player then
-                    driveSeat:SetNetworkOwner(player)
-                end
-            end)
-
-            root.CFrame = driveSeat.CFrame * CFrame.new(0, 2, 0)
-            task.wait(0.2)
-
-            local prompt = driveSeat:FindFirstChildOfClass("ProximityPrompt") or driveSeat:FindFirstChildWhichIsA("ProximityPrompt", true)
-            
+            pcall(function() driveSeat:SetNetworkOwner(player) end)
+            root.CFrame = driveSeat.CFrame
+            task.wait(0.3)
+            local prompt = driveSeat:FindFirstChildWhichIsA("ProximityPrompt", true)
             if prompt then
                 prompt:InputHoldBegin()
-                task.wait(prompt.HoldDuration + 0.05)
+                task.wait(prompt.HoldDuration + 0.1)
                 prompt:InputHoldEnd()
             else
                 driveSeat:Sit(hum)
             end
+        end
+    end
+end
 
-            -- Force Sit Loop
-            task.spawn(function()
-                for i = 1, 5 do
-                    if not hum.Sit then driveSeat:Sit(hum) end
-                    task.wait(0.5)
+-- [ SYSTEM: CLEAR WORLD (SAFE VERSION) ]
+function Engine:ClearWorld(player)
+    -- Daripada menghapus, lebih aman menyembunyikan objek secara lokal
+    -- Menghapus objek Workspace sering memicu kick "Missing Map Data"
+    for _, obj in ipairs(game.Workspace:GetChildren()) do
+        if obj:IsA("BasePart") and not string.find(obj.Name, "Montors") and obj.Name ~= player.Name then
+            pcall(function()
+                obj.Transparency = 1
+                obj.CanCollide = false
+            end)
+        elseif obj:IsA("Model") and not string.find(obj.Name, "Montors") and obj.Name ~= player.Name then
+            pcall(function()
+                for _, p in pairs(obj:GetDescendants()) do
+                    if p:IsA("BasePart") then
+                        p.Transparency = 1
+                        p.CanCollide = false
+                    end
                 end
             end)
         end
     end
 end
 
--- [ SYSTEM: CLEAR WORLD (OPTIMIZED) ]
-function Engine:ClearWorld(player)
-    for _, obj in ipairs(game.Workspace:GetChildren()) do
-        if obj:IsA("Terrain") or obj:IsA("Camera") or obj.Name == player.Name or obj.Name == "AntiVoidBase_DDS" then 
-            continue 
-        end
-        if string.find(obj.Name, "Montors") then continue end
-        pcall(function() obj:Destroy() end)
-    end
-end
-
--- [ SYSTEM: CRUISE LOGIC - BYPASS VERSION ]
+-- [ SYSTEM: CRUISE LOGIC - STEALTH BYPASS ]
 function Engine:RunCruise(player, config)
     local speed = 0
     local angle = math.random() * math.pi * 2
-    local lastY = 0
     
     return game:GetService("RunService").Heartbeat:Connect(function(dt)
         if not config.IsActive() then return end
@@ -133,49 +122,35 @@ function Engine:RunCruise(player, config)
         local char = player.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         local seat = hum and hum.SeatPart
+        if not seat then return end
         
-        if hum and not seat then
-            -- Auto Re-Sit
-            local pattern = player.Name .. "Montors"
-            for _, obj in pairs(workspace:GetChildren()) do
-                if string.find(obj.Name, pattern) then
-                    local s = obj:FindFirstChildWhichIsA("VehicleSeat", true)
-                    if s then s:Sit(hum) end
-                    break
-                end
-            end
-            return 
-        end
-        
-        local motorRoot = (seat and seat:FindFirstAncestorOfClass("Model") and seat.Parent.PrimaryPart) or seat
+        local motorRoot = (seat:FindFirstAncestorOfClass("Model") and seat.Parent.PrimaryPart) or seat
         if not motorRoot then return end
 
-        -- 1. Velocity Jitter (Mengacak kecepatan sedikit agar tidak flat 250)
-        local baseSpeed = math.random(225, 248)
-        speed = speed + (baseSpeed - speed) * 0.1 
+        -- 1. SPEED LIMITER (CRITICAL)
+        -- Turunkan ke 180-190. Kecepatan > 200 sangat mudah dideteksi server modern.
+        local safeSpeed = math.random(175, 195)
+        speed = speed + (safeSpeed - speed) * 0.05 
 
-        -- 2. Smooth Movement (Menambah noise agar belokan tidak matematis sempurna)
-        local noise = math.noise(tick() * 0.4) * 0.1
-        angle += (0.35 + noise) * dt
+        -- 2. RANDOM DIRECTION (Mencegah deteksi pola melingkar)
+        angle += (0.2 + (math.noise(tick() * 0.2) * 0.1)) * dt
         local move = Vector3.new(math.cos(angle), 0, math.sin(angle))
         
-        -- 3. Boundary Control
-        if Vector3.new(motorRoot.Position.X, 0, motorRoot.Position.Z).Magnitude > 2200 then
-            move = move:Lerp((-Vector3.new(motorRoot.Position.X, 0, motorRoot.Position.Z)).Unit, 0.1)
-        end
-        
-        -- 4. Dynamic Y-Lock (Mencegah deteksi 'Static Position')
+        -- 3. JITTERY Y-AXIS (Sangat penting agar tidak dianggap melayang statis)
         local targetY = (typeof(config.LockY) == "function" and config.LockY()) or config.LockY or motorRoot.Position.Y
-        -- Tambahkan osilasi halus (meniru gerakan melayang yang natural)
-        local hover = math.sin(tick() * 2) * 0.2
-        local velocityY = (targetY + hover - motorRoot.Position.Y) * 30
+        -- Tambahkan efek "Naik Turun" seperti motor kena gelombang jalan
+        local fakeBumpyRoad = math.sin(tick() * 4) * 0.8
+        local velocityY = (targetY + fakeBumpyRoad - motorRoot.Position.Y) * 15
+
+        -- 4. APPLY VELOCITY
+        motorRoot.AssemblyLinearVelocity = (move * speed) + Vector3.new(0, math.clamp(velocityY, -50, 50), 0)
         
-        -- 5. Final Execution
-        motorRoot.AssemblyLinearVelocity = (move * speed) + Vector3.new(0, math.clamp(velocityY, -40, 40), 0)
-        
-        -- Beri sedikit rotasi agar physics mesin tetap update di server
-        motorRoot.AssemblyAngularVelocity = Vector3.new(0, 0.05, 0)
-        
+        -- 5. SIMULASI STUCK/LAG (Teknik bypass agar server menganggap player lag)
+        if math.random(1, 500) == 1 then
+            motorRoot.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            task.wait(0.1)
+        end
+
         if hum.Sit == false then hum.Sit = true end
     end)
 end
