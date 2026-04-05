@@ -19,13 +19,12 @@ function Engine:InitAntiAFK(player)
 
     task.spawn(function()
         local VU = game:GetService("VirtualUser")
-        while task.wait(math.random(20, 40)) do
+        while task.wait(math.random(15, 30)) do
             pcall(function()
                 VU:CaptureController()
                 VU:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                task.wait(0.1)
+                task.wait(math.random(1, 3) / 10)
                 VU:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                VU:MouseMoveEvent(Vector2.new(math.random(1, 5), math.random(1, 5)), workspace.CurrentCamera.CFrame)
             end)
         end
     end)
@@ -43,12 +42,12 @@ function Engine:CreateAntiVoid(player)
             end
             local base = Instance.new("Part")
             base.Name = "AntiVoidBase_DDS"
-            base.Size = Vector3.new(4000, 1, 4000)
-            base.Position = root.Position - Vector3.new(0, 20, 0)
+            base.Size = Vector3.new(5000, 2, 5000) -- Sedikit lebih tebal
+            base.Position = root.Position - Vector3.new(0, 25, 0)
             base.Anchored = true
-            base.Transparency = 0.7
+            base.Transparency = 0.8
             base.BrickColor = BrickColor.new("Electric blue")
-            base.Material = Enum.Material.Neon
+            base.Material = Enum.Material.ForceField -- Material ForceField lebih ringan dirender
             base.Parent = game.Workspace
         end
     end
@@ -56,8 +55,7 @@ function Engine:CreateAntiVoid(player)
     if player.Character then task.spawn(setup, player.Character) end
 end
 
--- [ SYSTEM: RIDE MOTOR (Safe Hold Manipulation) ]
--- Perbaikan: Menggunakan manipulasi inputhold daripada fireproximityprompt
+-- [ SYSTEM: RIDE MOTOR ]
 function Engine:RideMotor(player)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -75,72 +73,50 @@ function Engine:RideMotor(player)
     end
 
     if motorModel then
-        local driveSeat = motorModel:FindFirstChild("DriveSeat") or motorModel:FindFirstChildWhichIsA("VehicleSeat", true)
+        local driveSeat = motorModel:FindFirstChildWhichIsA("VehicleSeat", true)
         
         if driveSeat then
-            -- Set Network Owner (PENTING: Agar physics tidak lag/stuck)
-            pcall(function()
-                driveSeat:SetNetworkOwner(player)
-            end)
-
-            -- Teleport tepat ke kursi
-            root.CFrame = driveSeat.CFrame
-            task.wait(0.3)
+            pcall(function() driveSeat:SetNetworkOwner(player) end)
+            root.CFrame = driveSeat.CFrame * CFrame.new(0, 2, 0)
+            task.wait(0.5)
 
             local prompt = driveSeat:FindFirstChildOfClass("ProximityPrompt") or driveSeat:FindFirstChildWhichIsA("ProximityPrompt", true)
             
             if prompt then
-                print("⏳ Safe Hold Interaction Started...")
                 prompt:InputHoldBegin()
-                -- Mengikuti durasi hold asli dari game
-                task.wait(prompt.HoldDuration + 0.1)
+                -- Tambahkan sedikit randomness agar tidak terdeteksi botting prompt
+                task.wait(prompt.HoldDuration + math.random(1, 5)/10)
                 prompt:InputHoldEnd()
-                print("✅ Hold Interaction Finished.")
             else
-                -- Jika tidak ada prompt, gunakan metode paksa sebagai cadangan
                 driveSeat:Sit(hum)
             end
 
-            -- Kunci agar tidak mental saat awal gerak
+            -- Safety Sit Loop
             task.spawn(function()
-                for i = 1, 10 do
-                    if hum.Sit == false then driveSeat:Sit(hum) end
-                    task.wait(0.2)
+                for i = 1, 5 do
+                    if not hum.Sit then driveSeat:Sit(hum) end
+                    task.wait(0.5)
                 end
             end)
-        else
-            warn("❌ DriveSeat tidak ditemukan.")
         end
-    else
-        warn("❌ Motor tidak ditemukan!")
-    end
-end
-
--- [ SYSTEM: CLEAR WORLD ]
-function Engine:ClearWorld(player)
-    for _, obj in ipairs(game.Workspace:GetChildren()) do
-        if obj:IsA("Terrain") or obj:IsA("Camera") or obj.Name == player.Name or obj.Name == "AntiVoidBase_DDS" then 
-            continue 
-        end
-        if string.find(obj.Name, "Montors") then continue end
-        pcall(function() obj:Destroy() end)
     end
 end
 
 -- [ SYSTEM: CRUISE LOGIC ]
--- Perbaikan: Logika deteksi root part yang lebih cerdas agar tidak stuck
 function Engine:RunCruise(player, config)
-    local speed, dir, angle = 0, 1, math.random()*math.pi*2
+    local currentSpeed = 0
+    local angle = math.random() * math.pi * 2
+    local runService = game:GetService("RunService")
     
-    return game:GetService("RunService").Heartbeat:Connect(function(dt)
+    return runService.Heartbeat:Connect(function(dt)
         if not config.IsActive() then return end
         
         local char = player.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         local seat = hum and hum.SeatPart
         
-        -- Auto Re-Sit: Jika karakter turun saat cruise aktif, tarik balik ke motor
         if hum and not seat then
+            -- Auto Re-sit logic
             local pattern = player.Name .. "Montors"
             for _, obj in pairs(workspace:GetChildren()) do
                 if string.find(obj.Name, pattern) then
@@ -152,37 +128,46 @@ function Engine:RunCruise(player, config)
             return 
         end
         
-        -- Ambil Root Part Motor dengan aman
         local motor = seat:FindFirstAncestorOfClass("Model")
-        -- Jika model tidak punya PrimaryPart, gunakan Seat itu sendiri sebagai root physics
         local motorRoot = (motor and motor.PrimaryPart) or seat
-        
         if not motorRoot then return end
-        
-        -- Memastikan status duduk terkunci
-        if hum.Sit == false then hum.Sit = true end
 
-        -- Logika Kecepatan (220 - 250 KM/H)
-        speed += dir*(dt*(250-220)/8)
-        if speed>=250 then speed=250 dir=-0.6 elseif speed<=220 then speed=220 dir=0.6 end
-
-        -- Logika Arah (Circular Movement)
-        angle += 0.35*dt
-        local move = Vector3.new(math.cos(angle),0,math.sin(angle))
+        -- 1. Logika Kecepatan Adaptif (Mencegah deteksi kecepatan konstan)
+        -- Target antara 180 - 230 (lebih aman daripada 250+)
+        local targetMax = config.MaxSpeed or 220
+        local targetMin = config.MinSpeed or 180
+        local wave = math.sin(tick() * 0.5) * 20 -- Variasi 20 unit
+        local dynamicTarget = (targetMax + targetMin) / 2 + wave
         
-        -- Boundary: Jika terlalu jauh (radius 2000), tarik balik ke tengah
-        if Vector3.new(motorRoot.Position.X,0,motorRoot.Position.Z).Magnitude > 2000 then
-            move = move:Lerp((-Vector3.new(motorRoot.Position.X,0,motorRoot.Position.Z)).Unit, 0.08)
+        -- Lerp kecepatan agar akselerasi halus (tidak instan)
+        currentSpeed = currentSpeed + (dynamicTarget - currentSpeed) * (dt * 2)
+
+        -- 2. Logika Arah Lingkaran (Circular Movement)
+        angle += (0.25 * dt) -- Kecepatan putar
+        local moveVector = Vector3.new(math.cos(angle), 0, math.sin(angle))
+        
+        -- 3. Boundary Control (Radius 1500 agar tidak terlalu jauh)
+        local posXZ = Vector3.new(motorRoot.Position.X, 0, motorRoot.Position.Z)
+        if posXZ.Magnitude > 1500 then
+            moveVector = moveVector:Lerp(-posXZ.Unit, 0.1)
         end
         
-        -- Eksekusi Pergerakan (Linear Velocity)
-        -- Menggunakan Y-Lock dinamis dari config
+        -- 4. Y-Level Smoothing (Anti-Bounce)
         local targetY = (typeof(config.LockY) == "function" and config.LockY()) or config.LockY or motorRoot.Position.Y
+        local yError = targetY - motorRoot.Position.Y
+        local yVelocity = math.clamp(yError * 10, -30, 30) -- Power 10 lebih halus dari 40
+
+        -- 5. Eksekusi Velocity dengan Lerp
+        local finalVelocity = (moveVector * currentSpeed) + Vector3.new(0, yVelocity, 0)
         
-        motorRoot.AssemblyLinearVelocity = (move * speed) + Vector3.new(0, math.clamp((targetY - motorRoot.Position.Y) * 40, -35, 35), 0)
+        -- Menggunakan Lerp pada Velocity agar transisi antar frame tidak patah-patah
+        motorRoot.AssemblyLinearVelocity = motorRoot.AssemblyLinearVelocity:Lerp(finalVelocity, 0.3)
         
-        -- Mencegah Motor miring (Optional but recommended)
+        -- Kunci rotasi agar tidak guling
         motorRoot.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        
+        -- Paksa karakter tetap duduk
+        if hum.Sit == false then hum.Sit = true end
     end)
 end
 
